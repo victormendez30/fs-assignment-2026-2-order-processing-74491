@@ -1,0 +1,45 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  order-api:
+    build:
+      context: .
+      dockerfile: OrderManagement.Api/Dockerfile
+    container_name: order-api
+    depends_on:
+      - rabbitmq
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - ./OrderManagement.Api/orders.db:/app/orders.db
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: Inventory.Service/Dockerfile
+    container_name: inventory-service
+    depends_on:
+      - rabbitmq
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: Payment.Service/Dockerfile
+    container_name: payment-service
+    depends_on:
+      - rabbitmq
+
+  shipping-service:
+    build:
+      context: .
+      dockerfile: Shipping.Service/Dockerfile
+    container_name: shipping-service
+    depends_on:
+      - rabbitmq
