@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build-test-dotnet:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Find solution
+        id: find-sln
+        run: |
+          SLN=$(find . -name "*.sln" | head -n 1)
+          if [ -z "$SLN" ]; then
+            echo "No .sln file found"
+            exit 1
+          fi
+          echo "solution=$SLN" >> $GITHUB_OUTPUT
+          echo "Found solution: $SLN"
+
+      - name: Restore
+        run: dotnet restore "${{ steps.find-sln.outputs.solution }}"
+
+      - name: Build
+        run: dotnet build "${{ steps.find-sln.outputs.solution }}" --configuration Release --no-restore
+
+      - name: Test
+        run: |
+          dotnet test "${{ steps.find-sln.outputs.solution }}" \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=test-results.trx" \
+            --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-test-results
+          path: ./TestResults
+
+  build-react-admin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            **/package-lock.json
+
+      - name: Find admin-dashboard
+        id: find-admin
+        run: |
+          APP_DIR=$(find . -type d -name "admin-dashboard" | head -n 1)
+          if [ -z "$APP_DIR" ]; then
+            echo "No admin-dashboard folder found"
+            exit 1
+          fi
+          echo "app_dir=$APP_DIR" >> $GITHUB_OUTPUT
+          echo "Found admin app: $APP_DIR"
+
+      - name: Install dependencies
+        working-directory: ${{ steps.find-admin.outputs.app_dir }}
+        run: npm ci
+
+      - name: Build React app
+        working-directory: ${{ steps.find-admin.outputs.app_dir }}
+        run: npm run build
