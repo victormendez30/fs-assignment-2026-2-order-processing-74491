@@ -22,7 +22,7 @@ public class InventoryReservedConsumer
         var channel = connection.CreateModel();
 
         channel.QueueDeclare(
-            queue: "inventory-reserved",
+            queue: "inventory-reserved-payment",
             durable: false,
             exclusive: false,
             autoDelete: false,
@@ -31,7 +31,7 @@ public class InventoryReservedConsumer
 
         var consumer = new EventingBasicConsumer(channel);
 
-        consumer.Received += (model, ea) =>
+        consumer.Received += async (model, ea) =>
         {
             var body = ea.Body.ToArray();
             var json = Encoding.UTF8.GetString(body);
@@ -40,17 +40,27 @@ public class InventoryReservedConsumer
 
             Console.WriteLine($"[Payment] Inventory result for order: {message?.OrderId}");
 
+            await Task.Delay(3000);
+
             var success = true;
 
-            _publisher.Publish("payment-processed", new PaymentProcessedEvent
+            _publisher.Publish("payment-processed-orderapi", new PaymentProcessedEvent
             {
                 OrderId = message!.OrderId,
                 Success = success
             });
+
+            _publisher.Publish("payment-processed-shipping", new PaymentProcessedEvent
+            {
+                OrderId = message!.OrderId,
+                Success = success
+            });
+
+            Console.WriteLine($"[Payment] Payment approved: {message.OrderId}");
         };
 
         channel.BasicConsume(
-            queue: "inventory-reserved",
+            queue: "inventory-reserved-payment",
             autoAck: true,
             consumer: consumer
         );

@@ -1,31 +1,39 @@
-﻿using MediatR;
+﻿using Contracts;
+using MediatR;
+using Messaging.RabbitMQ;
 using OrderManagement.Api.Application.Commands;
 using OrderManagement.Api.Domain;
-using Messaging.RabbitMQ;
-using Contracts;
+using OrderManagement.Api.Persistence;
 
 namespace OrderManagement.Api.Application.Handlers;
 
 public class CreateOrderHandler : IRequestHandler<CreateOrderCommand, Guid>
 {
     private readonly RabbitMqPublisher _publisher = new();
-    public static class CreateOrderHandlerAccessor
+    private readonly OrderDbContext _context;
+
+    public CreateOrderHandler(OrderDbContext context)
     {
-        public static List<Order> Orders { get; } = new();
+        _context = context;
     }
 
-    public Task<Guid> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
+    public async Task<Guid> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
         var order = new Order
         {
             Id = Guid.NewGuid(),
             CustomerName = request.CustomerName,
             TotalAmount = request.TotalAmount,
-            Status = "Pending",
+            Status = "Submitted",
             CreatedAt = DateTime.UtcNow
         };
 
-        OrderStore.Orders.Add(order);
+        _context.Orders.Add(order);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        order.Status = "InventoryPending";
+        await _context.SaveChangesAsync(cancellationToken);
+
         _publisher.Publish("order-created", new OrderCreatedEvent
         {
             OrderId = order.Id,
@@ -33,6 +41,6 @@ public class CreateOrderHandler : IRequestHandler<CreateOrderCommand, Guid>
             TotalAmount = order.TotalAmount
         });
 
-        return Task.FromResult(order.Id);
+        return order.Id;
     }
 }

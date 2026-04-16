@@ -1,15 +1,29 @@
-﻿using MediatR;
+﻿using AutoMapper;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using OrderManagement.Api.Application.DTOs;
 using OrderManagement.Api.Application.Queries;
-using OrderManagement.Api.Domain;
-using static OrderManagement.Api.Application.Handlers.CreateOrderHandler;
+using OrderManagement.Api.Persistence;
 
 namespace OrderManagement.Api.Application.Handlers;
 
-public class GetOrdersHandler : IRequestHandler<GetOrdersQuery, List<Order>>
+public class GetOrdersHandler : IRequestHandler<GetOrdersQuery, List<OrderDto>>
 {
-   
-     public Task<List<Order>> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
+    private readonly OrderDbContext _context;
+    private readonly IMapper _mapper;
+
+    public GetOrdersHandler(OrderDbContext context, IMapper mapper)
     {
-        return Task.FromResult(OrderStore.Orders);
+        _context = context;
+        _mapper = mapper;
+    }
+
+    public async Task<List<OrderDto>> Handle(GetOrdersQuery request, CancellationToken cancellationToken)
+    {
+        var orders = await _context.Orders
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return _mapper.Map<List<OrderDto>>(orders);
     }
 }

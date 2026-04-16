@@ -31,7 +31,7 @@ public class OrderCreatedConsumer
 
         var consumer = new EventingBasicConsumer(channel);
 
-        consumer.Received += (model, ea) =>
+        consumer.Received += async (model, ea) =>
         {
             var body = ea.Body.ToArray();
             var json = Encoding.UTF8.GetString(body);
@@ -40,21 +40,23 @@ public class OrderCreatedConsumer
 
             Console.WriteLine($"[Inventory] Order received: {message?.OrderId}");
 
+            await Task.Delay(2000);
+
             var success = true;
 
-            //  publish to Order API
             _publisher.Publish("inventory-reserved-orderapi", new InventoryReservedEvent
             {
                 OrderId = message!.OrderId,
                 Success = success
             });
 
-            //  publish to Payment Service
             _publisher.Publish("inventory-reserved-payment", new InventoryReservedEvent
             {
                 OrderId = message!.OrderId,
                 Success = success
             });
+
+            Console.WriteLine($"[Inventory] Inventory confirmed: {message.OrderId}");
         };
 
         channel.BasicConsume(

@@ -1,4 +1,5 @@
 ﻿using Contracts;
+using Messaging.RabbitMQ;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
@@ -8,6 +9,8 @@ namespace Shipping.Service.RabbitMQ;
 
 public class PaymentProcessedConsumer
 {
+    private readonly RabbitMqPublisher _publisher = new();
+
     public void Start()
     {
         var factory = new ConnectionFactory()
@@ -19,7 +22,7 @@ public class PaymentProcessedConsumer
         var channel = connection.CreateModel();
 
         channel.QueueDeclare(
-            queue: "payment-processed",
+            queue: "payment-processed-shipping",
             durable: false,
             exclusive: false,
             autoDelete: false,
@@ -28,18 +31,27 @@ public class PaymentProcessedConsumer
 
         var consumer = new EventingBasicConsumer(channel);
 
-        consumer.Received += (model, ea) =>
+        consumer.Received += async (model, ea) =>
         {
             var body = ea.Body.ToArray();
             var json = Encoding.UTF8.GetString(body);
 
             var message = JsonSerializer.Deserialize<PaymentProcessedEvent>(json);
 
-            Console.WriteLine($"[Shipping] Order shipped: {message?.OrderId}");
+            await Task.Delay(2000);
+
+            Console.WriteLine($"[Shipping] Shipping created: {message?.OrderId}");
+
+            _publisher.Publish("shipping-created-orderapi", new ShippingCreatedEvent
+            {
+                OrderId = message!.OrderId,
+                ShipmentReference = $"SHIP-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                EstimatedDispatchDate = DateTime.UtcNow.AddDays(2)
+            });
         };
 
         channel.BasicConsume(
-            queue: "payment-processed",
+            queue: "payment-processed-shipping",
             autoAck: true,
             consumer: consumer
         );
